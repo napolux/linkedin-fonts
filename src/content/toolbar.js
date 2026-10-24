@@ -11,6 +11,7 @@
  * attached inside the dialog or popover that contains the edited field
  * (see topLayerAncestor), and shown as a popover on top of it.
  */
+import { composedParent } from './dom.js';
 import css from './toolbar.css';
 
 const BUTTONS = [
@@ -35,7 +36,7 @@ const clamp = (value, min, max) => Math.min(Math.max(value, min), Math.max(min, 
  * @returns {Element|null}
  */
 export function topLayerAncestor(element) {
-  for (let node = element; node; node = node.parentElement ?? node.getRootNode().host ?? null) {
+  for (let node = element; node; node = composedParent(node)) {
     if (node.matches('dialog[open], :popover-open')) return node;
   }
   return null;

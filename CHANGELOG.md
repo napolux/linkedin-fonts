@@ -13,6 +13,11 @@ and the project uses [Semantic Versioning](https://semver.org/).
   live in the browser's top layer. The toolbar is now a popover attached
   inside the dialog or popover that contains the field.
 
+- Chrome: neither the toolbar nor the shortcuts worked in the messaging
+  overlay, whose editor lives in a shadow DOM. Chrome hides mouse selections
+  inside shadow roots from `document.getSelection()`; the selection is now
+  read from the editor's own shadow root.
+
 ### Changed
 
 - Less work on every keystroke while typing: no refresh on `keyup` unless a

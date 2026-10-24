@@ -102,7 +102,10 @@ flowchart LR
 `playground/index.html` mimics LinkedIn's fields: a multi-paragraph
 contenteditable with a mention chip, a textarea, a text input, a search box
 and static text, plus a "Start a post" and an "Edit intro" **modal dialog** and
-a chat **popover** (LinkedIn's editors in the browser's top layer). It loads `../dist/chrome/content.js` with a plain `<script>`
+a chat **popover** (LinkedIn's editors in the browser's top layer), and a
+chat editor inside an **open shadow DOM**, like LinkedIn's messaging overlay.
+Shadow DOM tests select text by dragging the real mouse, because Chrome
+treats scripted and mouse selections differently there. It loads `../dist/chrome/content.js` with a plain `<script>`
 tag (the content script uses no extension APIs), so **no extension install is
 needed**:
 

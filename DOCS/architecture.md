@@ -21,6 +21,8 @@ flowchart TD
     replace --> offsets
     replace --> diff["diff.js<br/>minimal edit"]
     toolbar --> css["toolbar.css"]
+    dom["dom.js<br/>shadow DOM helpers"]
+    editable & replace & theme & toolbar --> dom
 
     classDef pure stroke-dasharray: 5 4
     class unicode,diff pure
@@ -102,7 +104,7 @@ reasoning behind them are in [unicode.md](unicode.md).
 | Kind      | Elements                                            | Selection source                           |
 | --------- | --------------------------------------------------- | ------------------------------------------ |
 | `control` | `<textarea>`, `<input type="text">`                 | `selectionStart` / `selectionEnd`          |
-| `rich`    | any `contenteditable` element (outermost editing host) | `document.getSelection()` + text offsets |
+| `rich`    | any `contenteditable` element (outermost editing host) | `selectionFor()` + text offsets |
 
 Rules:
 
@@ -111,6 +113,17 @@ Rules:
   suggestions (`role="combobox"`): they are not content.
 - Detection never relies on LinkedIn class names. They change often, and
   `isContentEditable` / element types do not.
+- **Shadow DOM.** LinkedIn's chat overlay renders its editor inside an open
+  shadow root. The focused element is found by descending into open shadow
+  roots, and the selection is read from the field's own tree by
+  `selectionFor()` (`dom.js`). When the user selects text with the mouse
+  inside a shadow root, Chrome's `document.getSelection()` reports a
+  *collapsed* selection on the shadow host's parent instead of the real
+  one, which is only available from the non-standard
+  `ShadowRoot.getSelection()`. Firefox has no such method, and its
+  `document.getSelection()` already returns the nodes inside the shadow root.
+  Walking up the tree (theme detection, top-layer lookup) goes from a shadow
+  root to its host with `composedParent()`.
 
 ### `offsets.js`: positions that survive edits
 

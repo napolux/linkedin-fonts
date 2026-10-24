@@ -8,6 +8,8 @@
  * transparent, the operating system preference is used.
  */
 
+import { composedParent } from './dom.js';
+
 /** Relative luminance threshold (WCAG formula, 0 = black, 1 = white). */
 const DARK_LUMINANCE = 0.35;
 
@@ -47,7 +49,7 @@ function luminance([r, g, b]) {
  * @returns {'light'|'dark'}
  */
 export function detectTheme(element) {
-  for (let node = element; node; node = node.parentElement) {
+  for (let node = element; node; node = composedParent(node)) {
     const color = parseColor(getComputedStyle(node).backgroundColor);
     if (color && color[3] >= 0.5) return luminance(color) < DARK_LUMINANCE ? 'dark' : 'light';
   }

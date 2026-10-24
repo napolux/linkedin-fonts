@@ -31,13 +31,24 @@ function pageHelpers() {
   const settle = () =>
     new Promise((resolve) => requestAnimationFrame(() => requestAnimationFrame(() => setTimeout(resolve, 50))));
   const isControl = (element) => element.localName === 'textarea' || element.localName === 'input';
+  /** document.querySelector, plus "host >>> inner" to reach into an open shadow root. */
+  const find = (selector) => {
+    const [host, inner] = selector.split(' >>> ');
+    return inner ? document.querySelector(host).shadowRoot.querySelector(inner) : document.querySelector(host);
+  };
+  /** The focused element, inside open shadow roots too. */
+  const deepActive = () => {
+    let element = document.activeElement;
+    while (element?.shadowRoot?.activeElement) element = element.shadowRoot.activeElement;
+    return element;
+  };
 
   window.e2e = {
     settle,
 
     /** Selects from the first `from` to the end of the following `to`. */
     async select(selector, from, to = from) {
-      const element = document.querySelector(selector);
+      const element = find(selector);
       element.focus();
       if (isControl(element)) {
         const start = element.value.indexOf(from);
@@ -63,23 +74,54 @@ function pageHelpers() {
       await settle();
     },
 
+    /**
+     * Viewport points just inside the first character of `from` and the last
+     * character of `to`, to select that text by dragging the real mouse.
+     */
+    dragPoints(selector, from, to = from) {
+      const element = find(selector);
+      element.scrollIntoView({ block: 'center' });
+      const nodes = [];
+      const walker = document.createTreeWalker(element, NodeFilter.SHOW_TEXT);
+      while (walker.nextNode()) nodes.push(walker.currentNode);
+      const text = nodes.map((node) => node.data).join('');
+      const charBox = (offset) => {
+        let total = 0;
+        for (const node of nodes) {
+          if (offset < total + node.data.length) {
+            const range = document.createRange();
+            range.setStart(node, offset - total);
+            range.setEnd(node, offset - total + 1);
+            return range.getBoundingClientRect();
+          }
+          total += node.data.length;
+        }
+        throw new Error(`Offset ${offset} not found`);
+      };
+      const start = text.indexOf(from);
+      const first = charBox(start);
+      const last = charBox(text.indexOf(to, start) + to.length - 1);
+      return [first.left + 1, first.top + first.height / 2, last.right - 1, last.top + last.height / 2];
+    },
+
     async collapse(selector) {
-      const element = document.querySelector(selector);
+      const element = find(selector);
       if (isControl(element)) element.setSelectionRange(0, 0);
       else document.getSelection().collapse(element, 0);
       await settle();
     },
 
     selected() {
-      const element = document.activeElement;
-      return isControl(element)
-        ? element.value.slice(element.selectionStart, element.selectionEnd)
-        : document.getSelection().toString();
+      const element = deepActive();
+      if (isControl(element)) return element.value.slice(element.selectionStart, element.selectionEnd);
+      // Chrome hides selections inside shadow DOM from document.getSelection().
+      const root = element.getRootNode();
+      return (root.getSelection?.() ?? document.getSelection()).toString();
     },
 
     /** Textarea/input value, or the text of each <p> of a rich editor. */
     value(selector) {
-      const element = document.querySelector(selector);
+      const element = find(selector);
       return isControl(element) ? element.value : [...element.querySelectorAll('p')].map((p) => p.textContent);
     },
 
@@ -157,6 +199,12 @@ for (const { name, launch, binary } of BROWSERS) {
 
     const shortcut = async (letter, using = modifier) => {
       await browser.shortcut(letter, using);
+      await call('settle');
+    };
+
+    /** Selects text by dragging the real mouse (scripted selections behave differently in shadow DOM). */
+    const mouseSelect = async (selector, from, to) => {
+      await browser.drag(...(await call('dragPoints', selector, from, to)));
       await call('settle');
     };
 
@@ -332,6 +380,29 @@ for (const { name, launch, binary } of BROWSERS) {
         await press('bold');
         await writeFile(path.join(SCREENSHOTS, `${name.toLowerCase()}-${theme}-modal.png`), await browser.screenshot());
       }
+    });
+
+    // LinkedIn's chat overlay renders its editor inside an open shadow root,
+    // and Chrome hides that selection from document.getSelection().
+    describe('shadow DOM (messaging overlay)', () => {
+      const chat = '#chat-host >>> [contenteditable]';
+
+      test('toolbar works in an editor inside a shadow root', async () => {
+        await mouseSelect(chat, 'how are you');
+        assert.equal(await call('selected'), 'how are you');
+        await press('bold');
+        await press('underline');
+        assert.equal(await call('selected'), underline(bold('how are you')));
+        assert.deepEqual(await call('value', chat), [`Hey Jane, ${underline(bold('how are you'))}?`, 'Talk soon.']);
+      });
+
+      test('shortcuts work in an editor inside a shadow root', async () => {
+        await mouseSelect(chat, 'Jane', 'soon');
+        await shortcut('i');
+        assert.deepEqual(await call('value', chat), [`Hey ${italic('Jane, how are you?')}`, `${italic('Talk soon')}.`]);
+        await shortcut('i');
+        assert.deepEqual(await call('value', chat), ['Hey Jane, how are you?', 'Talk soon.']);
+      });
     });
 
     // LinkedIn opens "Start a post" and the profile forms in modal dialogs,

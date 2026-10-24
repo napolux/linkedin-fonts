@@ -9,6 +9,7 @@
  * Detection is generic on purpose: it does not depend on LinkedIn's class
  * names, which change often.
  */
+import { selectionFor } from './dom.js';
 import { pointToOffset, textSegments } from './offsets.js';
 
 /**
@@ -66,7 +67,8 @@ function controlTarget(element) {
 
 /** @returns {RichTarget|null} */
 function richTarget(active) {
-  const selection = document.getSelection();
+  // Read the selection from the field's own tree (shadow DOM, see dom.js).
+  const selection = active ? selectionFor(active) : document.getSelection();
   if (!selection || selection.rangeCount === 0 || selection.isCollapsed) return null;
 
   const range = selection.getRangeAt(0);

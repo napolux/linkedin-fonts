@@ -12,6 +12,7 @@
  * Only the part of the text that really changes is rewritten (see diff.js).
  */
 import { minimalEdit } from './diff.js';
+import { selectionFor } from './dom.js';
 import { offsetToPoint, textSegments } from './offsets.js';
 
 /**
@@ -85,7 +86,7 @@ function replaceInControl(target, transform) {
 function selectOffsets(root, start, end, caretAffinity = 'backward') {
   const from = offsetToPoint(root, start, start === end ? caretAffinity : 'forward');
   const to = start === end ? from : offsetToPoint(root, end, 'backward');
-  document.getSelection().setBaseAndExtent(from.node, from.offset, to.node, to.offset);
+  selectionFor(root).setBaseAndExtent(from.node, from.offset, to.node, to.offset);
 }
 
 /** @param {import('./editable.js').RichTarget} target */
@@ -108,7 +109,7 @@ function replaceInRichText(target, transform) {
       edit.from === 0 ? 'forward' : 'backward',
     );
     editSelection(edit.text, () => {
-      const selection = document.getSelection();
+      const selection = selectionFor(root);
       const range = selection.getRangeAt(0);
       range.deleteContents();
       if (edit.text) {

@@ -4,7 +4,8 @@
  * - Firefox through WebDriver BiDi.
  * Both talk over Node's built-in WebSocket and expose the same interface:
  *
- *   open(url), evaluate(expression), click(x, y), shortcut(letter, modifier),
+ *   open(url), evaluate(expression), click(x, y), drag(x1, y1, x2, y2),
+ *   shortcut(letter, modifier),
  *   screenshot() -> Buffer, close()
  *
  * Browsers are found in the usual install locations or through the
@@ -201,6 +202,21 @@ export async function launchChrome(binary = chromePath) {
         });
       }
     },
+    /** Presses the left button at (x1, y1), moves to (x2, y2) and releases: a real drag selection. */
+    async drag(x1, y1, x2, y2) {
+      await send('Input.dispatchMouseEvent', { type: 'mouseMoved', x: x1, y: y1, button: 'none' });
+      await send('Input.dispatchMouseEvent', { type: 'mousePressed', x: x1, y: y1, button: 'left', clickCount: 1 });
+      for (const step of [0.25, 0.5, 0.75, 1]) {
+        await send('Input.dispatchMouseEvent', {
+          type: 'mouseMoved',
+          x: x1 + (x2 - x1) * step,
+          y: y1 + (y2 - y1) * step,
+          button: 'left',
+          buttons: 1,
+        });
+      }
+      await send('Input.dispatchMouseEvent', { type: 'mouseReleased', x: x2, y: y2, button: 'left', clickCount: 1 });
+    },
     // `modifier` is 'Meta' (Cmd on macOS) or 'Control'.
     async shortcut(letter, modifier) {
       const key = {
@@ -281,6 +297,22 @@ export async function launchFirefox(binary = firefoxPath) {
           actions: [
             { type: 'pointerMove', x: Math.round(x), y: Math.round(y) },
             { type: 'pointerDown', button: 0 },
+            { type: 'pointerUp', button: 0 },
+          ],
+        },
+      ]);
+    },
+    /** Presses the left button at (x1, y1), moves to (x2, y2) and releases: a real drag selection. */
+    async drag(x1, y1, x2, y2) {
+      await perform([
+        {
+          type: 'pointer',
+          id: 'mouse',
+          parameters: { pointerType: 'mouse' },
+          actions: [
+            { type: 'pointerMove', x: Math.round(x1), y: Math.round(y1) },
+            { type: 'pointerDown', button: 0 },
+            { type: 'pointerMove', x: Math.round(x2), y: Math.round(y2), duration: 100 },
             { type: 'pointerUp', button: 0 },
           ],
         },

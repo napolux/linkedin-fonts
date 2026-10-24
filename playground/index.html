@@ -146,6 +146,11 @@ Second line with àccénts and digits 1234.</textarea>
       </section>
 
       <section>
+        <h2>Messaging overlay (editor inside an open shadow DOM, like LinkedIn's chat)</h2>
+        <div id="chat-host"></div>
+      </section>
+
+      <section>
         <h2>Static text: the toolbar must NOT appear</h2>
         <p>This paragraph is not editable, selecting it does nothing.</p>
       </section>
@@ -176,6 +181,18 @@ Second line with àccénts and digits 1234.</textarea>
     </div>
 
     <script>
+      // LinkedIn's chat overlay renders its editor inside an open shadow root.
+      const chatRoot = document.getElementById('chat-host').attachShadow({ mode: 'open' });
+      chatRoot.innerHTML = `
+        <style>
+          div { border: 1px solid var(--border); border-radius: 4px; padding: 8px 12px; }
+          p { margin: 0; }
+        </style>
+        <div class="msg-form__contenteditable" contenteditable="true" role="textbox">
+          <p>Hey Jane, how are you?</p>
+          <p>Talk soon.</p>
+        </div>`;
+
       for (const button of document.querySelectorAll('[data-open]')) {
         button.addEventListener('click', () => document.getElementById(button.dataset.open).showModal());
       }

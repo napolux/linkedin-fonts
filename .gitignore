@@ -1,0 +1,13 @@
+# Dependencies
+node_modules/
+
+# Build output
+dist/
+artifacts/
+web-ext-artifacts/
+
+# OS / editor noise
+.DS_Store
+*.log
+.idea/
+.vscode/

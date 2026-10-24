@@ -1,0 +1,155 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Fonts for LinkedIn — playground</title>
+    <!--
+      Manual test page. Run `npm run build` first, then open this file in a
+      browser: the content script is loaded directly with a <script> tag, no
+      extension install needed. See DOCS/development.md.
+    -->
+    <style>
+      :root {
+        color-scheme: light;
+        --page: #f4f2ee;
+        --card: #ffffff;
+        --text: rgba(0, 0, 0, 0.9);
+        --muted: rgba(0, 0, 0, 0.6);
+        --border: rgba(0, 0, 0, 0.15);
+      }
+      :root.dark {
+        color-scheme: dark;
+        --page: #000000;
+        --card: #1b1f23;
+        --text: rgba(255, 255, 255, 0.9);
+        --muted: rgba(255, 255, 255, 0.6);
+        --border: rgba(255, 255, 255, 0.2);
+      }
+      body {
+        margin: 0;
+        padding: 32px 16px 400px;
+        background: var(--page);
+        color: var(--text);
+        font: 14px/1.5 -apple-system, system-ui, "Segoe UI", Roboto, sans-serif;
+      }
+      main {
+        max-width: 640px;
+        margin: 0 auto;
+        display: grid;
+        gap: 16px;
+      }
+      section {
+        background: var(--card);
+        border-radius: 8px;
+        padding: 16px;
+        box-shadow: 0 0 0 1px var(--border);
+      }
+      h1 {
+        font-size: 20px;
+        margin: 0;
+      }
+      h2 {
+        font-size: 14px;
+        margin: 0 0 8px;
+        color: var(--muted);
+        font-weight: 600;
+      }
+      [contenteditable="true"],
+      textarea,
+      input {
+        box-sizing: border-box;
+        width: 100%;
+        padding: 8px 12px;
+        border: 1px solid var(--border);
+        border-radius: 4px;
+        background: transparent;
+        color: inherit;
+        font: inherit;
+        outline-offset: 2px;
+      }
+      [contenteditable="true"] p {
+        margin: 0;
+      }
+      .mention {
+        color: #0a66c2;
+        font-weight: 600;
+      }
+      .codepoints {
+        font: 12px/1.4 ui-monospace, Menlo, monospace;
+        color: var(--muted);
+        white-space: pre-wrap;
+        word-break: break-all;
+        margin: 8px 0 0;
+      }
+    </style>
+  </head>
+  <body>
+    <main>
+      <header>
+        <h1>Fonts for LinkedIn — playground</h1>
+        <p>
+          Select text in any field below. Theme:
+          <button type="button" id="theme">Toggle light / dark</button>
+        </p>
+      </header>
+
+      <section>
+        <h2>Post / comment / message (contenteditable, multiple paragraphs)</h2>
+        <div id="rich" contenteditable="true" role="textbox" aria-multiline="true">
+          <p>Hello world, this is a LinkedIn post.</p>
+          <p>Perché è così difficile? Ça va, señor Müller! 2026 👋</p>
+          <p>Thanks <span class="mention" contenteditable="false">Jane Doe</span> for the help.</p>
+        </div>
+        <pre class="codepoints" data-source="rich"></pre>
+      </section>
+
+      <section>
+        <h2>About section (textarea)</h2>
+        <textarea id="textarea" rows="4">I write about web development.
+Second line with àccénts and digits 1234.</textarea>
+        <pre class="codepoints" data-source="textarea"></pre>
+      </section>
+
+      <section>
+        <h2>Headline (input type="text")</h2>
+        <input id="input" type="text" value="Software engineer at Example Corp" />
+        <pre class="codepoints" data-source="input"></pre>
+      </section>
+
+      <section>
+        <h2>Search box (input role="combobox"): the toolbar must NOT appear</h2>
+        <input type="text" role="combobox" value="search query" aria-expanded="false" />
+      </section>
+
+      <section>
+        <h2>Static text: the toolbar must NOT appear</h2>
+        <p>This paragraph is not editable, selecting it does nothing.</p>
+      </section>
+    </main>
+
+    <script>
+      document.getElementById('theme').addEventListener('click', () => {
+        document.documentElement.classList.toggle('dark');
+      });
+
+      // Shows what the field really contains, so styled characters can be checked.
+      const describe = (text) =>
+        [...text]
+          .map((char) => {
+            const code = char.codePointAt(0);
+            return code > 0x7e ? `U+${code.toString(16).toUpperCase()}` : char;
+          })
+          .join(' ');
+      const refresh = () => {
+        for (const pre of document.querySelectorAll('.codepoints')) {
+          const source = document.getElementById(pre.dataset.source);
+          pre.textContent = describe('value' in source ? source.value : source.innerText);
+        }
+      };
+      document.addEventListener('input', refresh);
+      refresh();
+    </script>
+    <script src="../dist/chrome/content.js"></script>
+  </body>
+</html>

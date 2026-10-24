@@ -1,0 +1,118 @@
+/*
+ * Toolbar styles. Injected inside a closed shadow root, so LinkedIn's CSS
+ * cannot reach these elements and these rules cannot leak into the page.
+ * Colors follow LinkedIn's own palette in light and dark mode.
+ */
+
+:host {
+  all: initial;
+}
+
+.toolbar {
+  --lf-bg: #ffffff;
+  --lf-fg: rgba(0, 0, 0, 0.9);
+  --lf-hover: rgba(0, 0, 0, 0.08);
+  --lf-pressed-bg: #0a66c2;
+  --lf-pressed-fg: #ffffff;
+  --lf-shadow: 0 0 0 1px rgba(0, 0, 0, 0.08), 0 4px 16px rgba(0, 0, 0, 0.16);
+
+  position: fixed;
+  top: 0;
+  left: 0;
+  z-index: 2147483647;
+  display: flex;
+  gap: 2px;
+  padding: 4px;
+  border-radius: 8px;
+  background: var(--lf-bg);
+  color: var(--lf-fg);
+  box-shadow: var(--lf-shadow);
+  font: 16px/1 -apple-system, system-ui, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+  user-select: none;
+  -webkit-user-select: none;
+  animation: lf-appear 120ms ease-out;
+}
+
+.toolbar[data-theme="dark"] {
+  --lf-bg: #1b1f23;
+  --lf-fg: rgba(255, 255, 255, 0.9);
+  --lf-hover: rgba(255, 255, 255, 0.12);
+  --lf-pressed-bg: #71b7fb;
+  --lf-pressed-fg: #000000;
+  --lf-shadow: 0 0 0 1px rgba(255, 255, 255, 0.14), 0 4px 16px rgba(0, 0, 0, 0.6);
+}
+
+.toolbar[hidden] {
+  display: none;
+}
+
+button {
+  all: unset;
+  box-sizing: border-box;
+  display: grid;
+  place-items: center;
+  width: 32px;
+  height: 32px;
+  border-radius: 6px;
+  color: inherit;
+  cursor: pointer;
+  transition: background-color 80ms ease-out, color 80ms ease-out;
+}
+
+button:hover:not([aria-disabled="true"]) {
+  background: var(--lf-hover);
+}
+
+button[aria-pressed="true"],
+button[aria-pressed="true"]:hover {
+  background: var(--lf-pressed-bg);
+  color: var(--lf-pressed-fg);
+}
+
+button[aria-disabled="true"] {
+  opacity: 0.35;
+  cursor: default;
+}
+
+.glyph-bold {
+  font-weight: 700;
+}
+
+.glyph-italic {
+  font-family: Georgia, "Times New Roman", serif;
+  font-style: italic;
+  font-size: 18px;
+}
+
+.glyph-underline {
+  text-decoration: underline;
+  text-decoration-thickness: 1.5px;
+  text-underline-offset: 3px;
+}
+
+@keyframes lf-appear {
+  from {
+    opacity: 0;
+    transform: translateY(4px) scale(0.96);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .toolbar,
+  button {
+    animation: none;
+    transition: none;
+  }
+}
+
+/* Windows High Contrast and other forced color modes. */
+@media (forced-colors: active) {
+  .toolbar {
+    border: 1px solid CanvasText;
+  }
+
+  button[aria-pressed="true"] {
+    background: Highlight;
+    color: HighlightText;
+  }
+}

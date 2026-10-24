@@ -1,0 +1,49 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+permissions:
+  contents: read
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+
+      - uses: actions/setup-node@v7
+        with:
+          node-version-file: .nvmrc
+          cache: npm
+
+      - run: npm ci
+
+      - name: Unit tests
+        run: npm test
+
+      - name: Build (Chrome and Firefox)
+        run: npm run build
+
+      - name: Lint (ESLint + web-ext lint)
+        run: npm run lint
+
+      # The Ubuntu runner image ships Google Chrome and Firefox.
+      - name: End-to-end tests (headless Chrome and Firefox)
+        run: npm run test:e2e
+
+      - name: Upload builds
+        uses: actions/upload-artifact@v7
+        with:
+          name: dist
+          path: dist/
+
+      - name: Upload end-to-end screenshots
+        if: always()
+        uses: actions/upload-artifact@v7
+        with:
+          name: e2e-screenshots
+          path: artifacts/e2e/
+          if-no-files-found: ignore

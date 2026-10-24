@@ -83,6 +83,21 @@ function pageHelpers() {
       return isControl(element) ? element.value : [...element.querySelectorAll('p')].map((p) => p.textContent);
     },
 
+    /**
+     * Records whether the next keydowns were cancelled. Registered after the
+     * extension's own capture listener, so it sees the extension's decision.
+     */
+    trackKeys() {
+      window.e2e.keyPrevented = null;
+      window.addEventListener('keydown', (event) => {
+        window.e2e.keyPrevented = event.defaultPrevented;
+      }, true);
+    },
+
+    lastKeyPrevented() {
+      return window.e2e.keyPrevented;
+    },
+
     selectionTop() {
       return document.getSelection().getRangeAt(0).getBoundingClientRect().top;
     },
@@ -125,9 +140,10 @@ const BROWSERS = [
 for (const { name, launch, binary } of BROWSERS) {
   describe(name, { skip: binary ? false : `${name} is not installed` }, () => {
     let browser;
-    // Decided by the host OS, not by the page: on a Mac users press Cmd, and the
-    // test must catch the extension expecting anything else.
-    const mac = process.platform === 'darwin';
+    // Decided by the host OS, not by the page: on a Mac users press Cmd (Meta),
+    // elsewhere Ctrl, and the test must catch the extension expecting anything else.
+    const modifier = process.platform === 'darwin' ? 'Meta' : 'Control';
+    const otherModifier = modifier === 'Meta' ? 'Control' : 'Meta';
 
     const call = (helper, ...args) =>
       browser.evaluate(`window.e2e.${helper}(${args.map((arg) => JSON.stringify(arg)).join(', ')})`);
@@ -139,8 +155,13 @@ for (const { name, launch, binary } of BROWSERS) {
       await call('settle');
     };
 
-    const shortcut = async (letter) => {
-      await browser.shortcut(letter, { mac });
+    const shortcut = async (letter, using = modifier) => {
+      await browser.shortcut(letter, using);
+      await call('settle');
+    };
+
+    const openModal = async (id) => {
+      await browser.evaluate(`(document.getElementById(${JSON.stringify(id)}).showModal(), true)`);
       await call('settle');
     };
 
@@ -234,6 +255,19 @@ for (const { name, launch, binary } of BROWSERS) {
       assert.equal(await call('selected'), underline(italic(bold('Hello world'))));
     });
 
+    test('ignores the other platform modifier (Ctrl on macOS, Cmd elsewhere)', async () => {
+      for (const selector of ['#rich', '#textarea']) {
+        const original = await call('value', selector);
+        await call('select', selector, selector === '#rich' ? 'Hello world' : 'web development');
+        await call('trackKeys');
+        for (const letter of ['b', 'i', 'u']) {
+          await shortcut(letter, otherModifier);
+          assert.equal(await call('lastKeyPrevented'), false, `${otherModifier}+${letter} must reach the page`);
+        }
+        assert.deepEqual(await call('value', selector), original, `${otherModifier} must not style ${selector}`);
+      }
+    });
+
     test('round-trips accented letters and keeps emoji intact', async () => {
       const original = (await call('value', '#rich'))[1];
       await call('select', '#rich', 'Perché', '👋');
@@ -292,7 +326,58 @@ for (const { name, launch, binary } of BROWSERS) {
         await press('bold');
         const file = path.join(SCREENSHOTS, `${name.toLowerCase()}-${theme}.png`);
         await writeFile(file, await browser.screenshot());
+
+        await openModal('post-dialog');
+        await call('select', '#dialog-rich', 'new role');
+        await press('bold');
+        await writeFile(path.join(SCREENSHOTS, `${name.toLowerCase()}-${theme}-modal.png`), await browser.screenshot());
       }
+    });
+
+    // LinkedIn opens "Start a post" and the profile forms in modal dialogs,
+    // which live in the browser's top layer, above any z-index.
+    describe('top layer (modal dialogs and popovers)', () => {
+      test('toolbar works inside a modal dialog (new post)', async () => {
+        await openModal('post-dialog');
+        await call('select', '#dialog-rich', 'new role');
+        await press('bold');
+        await press('italic');
+        assert.equal(await call('selected'), italic(bold('new role')));
+        assert.equal(
+          (await call('value', '#dialog-rich'))[0],
+          `Excited to share my ${italic(bold('new role'))} at Example Corp.`,
+        );
+        assert.equal(await browser.evaluate('document.getElementById("post-dialog").open'), true);
+      });
+
+      test('toolbar works on profile fields inside a modal dialog', async () => {
+        await openModal('intro-dialog');
+        await call('select', '#dialog-input', 'Example Corp');
+        await press('underline');
+        assert.equal(await call('value', '#dialog-input'), `Senior engineer at ${underline('Example Corp')}`);
+
+        await call('select', '#dialog-textarea', 'the web');
+        await press('bold');
+        assert.equal(await call('value', '#dialog-textarea'), `I build things for ${bold('the web')}.`);
+      });
+
+      test('toolbar works inside a popover and keeps it open', async () => {
+        await browser.evaluate('(document.getElementById("chat-popover").showPopover(), true)');
+        await call('select', '#popover-rich', 'see you');
+        await press('bold');
+        assert.equal(await call('selected'), bold('see you'));
+        assert.equal(await browser.evaluate('document.getElementById("chat-popover").matches(":popover-open")'), true);
+      });
+
+      test('toolbar comes back on the page after the modal closes', async () => {
+        await openModal('post-dialog');
+        await call('select', '#dialog-rich', 'new role');
+        assert.ok(await call('toolbar'));
+        await browser.evaluate('(document.getElementById("post-dialog").close(), true)');
+        await call('select', '#rich', 'Hello world');
+        await press('bold');
+        assert.equal(await call('selected'), bold('Hello world'));
+      });
     });
   });
 }

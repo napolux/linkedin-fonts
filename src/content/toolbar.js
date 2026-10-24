@@ -1,9 +1,15 @@
 /**
  * The floating B / I / U toolbar.
  *
- * It lives in a closed shadow root attached to <html>, isolated from
- * LinkedIn's styles and scripts. It never takes focus: pressing a button
- * must not clear the selection the button is about to change.
+ * It lives in a closed shadow root, isolated from LinkedIn's styles and
+ * scripts. It never takes focus: pressing a button must not clear the
+ * selection the button is about to change.
+ *
+ * The host is a manual popover, shown in the browser's top layer. Modal
+ * dialogs (LinkedIn's "Start a post", profile forms) also live there,
+ * above any z-index, and make everything outside them inert. So the host is
+ * attached inside the dialog or popover that contains the edited field
+ * (see topLayerAncestor), and shown as a popover on top of it.
  */
 import css from './toolbar.css';
 
@@ -19,6 +25,21 @@ const CAN = { bold: 'canBold', italic: 'canItalic', underline: 'canUnderline' };
 const GAP = 8;
 
 const clamp = (value, min, max) => Math.min(Math.max(value, min), Math.max(min, max));
+
+/**
+ * The closest open <dialog> or popover containing `element`, crossing
+ * shadow roots, or null. The toolbar must live inside it to be visible and
+ * clickable (and to not light-dismiss LinkedIn's own popovers).
+ *
+ * @param {Element} element
+ * @returns {Element|null}
+ */
+export function topLayerAncestor(element) {
+  for (let node = element; node; node = node.parentElement ?? node.getRootNode().host ?? null) {
+    if (node.matches('dialog[open], :popover-open')) return node;
+  }
+  return null;
+}
 
 export class Toolbar {
   #host;
@@ -43,6 +64,9 @@ export class Toolbar {
       'height: 0 !important',
       'z-index: 2147483647 !important',
     ].join(';');
+    // Inline !important styles above override the UA popover styles
+    // (border, padding, background, centering).
+    this.#host.setAttribute('popover', 'manual');
     this.#shadow = this.#host.attachShadow({ mode: 'closed' });
 
     const style = document.createElement('style');
@@ -92,9 +116,12 @@ export class Toolbar {
     return !this.#bar.hidden;
   }
 
-  /** A node inside the shadow root where temporary measuring elements can go. */
-  get scratch() {
-    this.#attach();
+  /**
+   * A node inside the shadow root where temporary measuring elements can go.
+   * @param {Element} container  Where the toolbar lives (see show()).
+   */
+  scratchIn(container) {
+    this.#attach(container);
     return this.#shadow;
   }
 
@@ -109,9 +136,10 @@ export class Toolbar {
    * @param {import('./position.js').Box} box  Selection box, viewport coordinates.
    * @param {ReturnType<import('./unicode.js').analyze>} state
    * @param {'light'|'dark'} theme
+   * @param {Element} container  topLayerAncestor() of the field, or <html>.
    */
-  show(box, state, theme) {
-    this.#attach();
+  show(box, state, theme, container) {
+    this.#attach(container);
     this.#bar.dataset.theme = theme;
     for (const [name, button] of this.#buttons) {
       button.setAttribute('aria-pressed', String(state[name]));
@@ -129,11 +157,30 @@ export class Toolbar {
   }
 
   hide() {
+    // Called on every keystroke while typing: do nothing if already hidden.
+    if (this.#bar.hidden) return;
     this.#bar.hidden = true;
+    // Closing the popover means the next show() opens it again on top of
+    // whatever entered the top layer in the meantime.
+    if (this.#isOpen()) this.#host.hidePopover();
   }
 
-  /** (Re)attaches the host: single-page apps sometimes wipe foreign nodes. */
-  #attach() {
-    if (!this.#host.isConnected) document.documentElement.append(this.#host);
+  #isOpen() {
+    return this.#host.matches(':popover-open');
+  }
+
+  /**
+   * Puts the host in `container` (moving it if needed: single-page apps
+   * also wipe foreign nodes) and opens it in the top layer.
+   */
+  #attach(container) {
+    if (this.#host.parentNode !== container) container.append(this.#host);
+    if (!this.#isOpen()) {
+      try {
+        this.#host.showPopover();
+      } catch {
+        // Not fatal: the toolbar still works outside of modal dialogs.
+      }
+    }
   }
 }

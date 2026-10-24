@@ -5,46 +5,71 @@ service worker, no popup, no options page and no extension API call. Both
 browsers run the same `content.js` on `https://www.linkedin.com/*` pages; only
 the manifest differs per browser.
 
+The code lives in `src/content/`. Arrows mean "imports", and dashed boxes
+are pure modules (no DOM access) that are unit-tested in Node:
+
+```mermaid
+flowchart TD
+    index["index.js<br/>events, shortcuts"]
+    index --> unicode["unicode.js<br/>styling rules"]
+    index --> editable["editable.js<br/>supported field?"]
+    index --> replace["replace.js<br/>rewrite + reselect"]
+    index --> position["position.js<br/>selection box"]
+    index --> theme["theme.js<br/>light / dark"]
+    index --> toolbar["toolbar.js<br/>toolbar UI"]
+    editable --> offsets["offsets.js<br/>text offsets"]
+    replace --> offsets
+    replace --> diff["diff.js<br/>minimal edit"]
+    toolbar --> css["toolbar.css"]
+
+    classDef pure stroke-dasharray: 5 4
+    class unicode,diff pure
 ```
-src/
-├── manifest/          base.json + chrome.json / firefox.json → dist/<browser>/manifest.json
-├── icons/             icon.svg (source) + PNGs
-└── content/
-    ├── index.js       entry point: event wiring, toolbar lifecycle, shortcuts
-    ├── unicode.js     pure styling logic (no DOM)
-    ├── diff.js        pure: smallest edit between two strings
-    ├── editable.js    is the selection inside a supported field?
-    ├── offsets.js     text-offset model for contenteditable editors
-    ├── replace.js     rewrites the selection and selects the result again
-    ├── position.js    on-screen box of the selection
-    ├── theme.js       light/dark detection
-    ├── toolbar.js     the B / I / U toolbar (closed shadow DOM)
-    └── toolbar.css    toolbar styles, inlined into the bundle
-```
+
+`src/manifest/` holds the shared and per-browser manifest fields, and
+`src/icons/` the icon (SVG source and PNGs). See [Build](#build).
 
 ## The big picture
 
-```
- selectionchange, select, keyup,          ┌──────────────────┐
- focusin/out, pointerup, scroll, resize ─▶│ scheduleRefresh  │ (one per animation frame)
-                                          └────────┬─────────┘
-                                                   ▼
-                    getActiveTarget()  ──null──▶ toolbar.hide()
-                          │ target
-                          ▼
-         getSelectionBox() + analyze(target.text) + detectTheme()
-                          │
-                          ▼
-                   toolbar.show(box, state, theme)
+Every event that can change the selection leads to a **refresh**, which
+shows, moves, updates or hides the toolbar:
 
- click on B / I / U ─┐
- Ctrl/⌘ + B / I / U ─┴▶ toggle(target, style)
-                          │  enabled = !analyze(text)[style]
-                          ▼
-         replaceSelection(target, text => applyStyle(text, style, enabled))
-                          │  edits the field, selects the new text
-                          ▼
-                    scheduleRefresh()  → buttons show the new state
+```mermaid
+flowchart TD
+    events["selection, focus, keyboard,<br/>pointer, scroll and resize events"]
+    events --> schedule["scheduleRefresh()<br/>once per animation frame"]
+    schedule --> drag{{"mouse button down?"}}
+    drag -- "yes: wait for pointerup" --> wait(["no change"])
+    drag -- no --> target["getActiveTarget()"]
+    target -- "null: no selection, unsupported<br/>or unfocused field" --> hide["toolbar.hide()"]
+    target -- target --> container["topLayerAncestor()<br/>dialog, popover or html"]
+    container --> box["getSelectionBox()"]
+    box -- "null: off screen" --> hide
+    box -- box --> show["analyze() + detectTheme()<br/>toolbar.show(box, state, theme)"]
+```
+
+Pressing a button or a shortcut **toggles** a style on the selection:
+
+```mermaid
+sequenceDiagram
+    actor User
+    participant Index as index.js
+    participant Unicode as unicode.js
+    participant Replace as replace.js
+    participant Editor as LinkedIn field
+
+    User->>Index: click B / I / U, or ⌘ (macOS) / Ctrl + B / I / U
+    Index->>Index: getActiveTarget()
+    Index->>Unicode: analyze(selected text)
+    Unicode-->>Index: does all of it already have the style?
+    Note over Index: enabled = not active, so the style is added or removed
+    Index->>Replace: replaceSelection(target, text → applyStyle(text, style, enabled))
+    loop every changed segment, last to first
+        Replace->>Editor: select the changed characters, execCommand insertText
+        Editor-->>Replace: beforeinput / input, the editor updates its model
+    end
+    Replace->>Editor: select the new text again
+    Index->>Index: scheduleRefresh(), buttons show the new state
 ```
 
 The toolbar stays visible as long as there is a non-empty selection inside a
@@ -117,7 +142,7 @@ had typed it*:
 
 - the browser fires trusted `beforeinput` and `input` events, so every editor
   framework (Quill, React, Lexical, ProseMirror…) updates its own model;
-- the change is recorded on the native undo stack, so <kbd>Ctrl/⌘+Z</kbd> works.
+- the change is recorded on the native undo stack, so undo (<kbd>⌘</kbd>+<kbd>Z</kbd> / <kbd>Ctrl</kbd>+<kbd>Z</kbd>) works.
 
 Setting `textContent` or `value` directly would desynchronize the editor:
 LinkedIn would publish the old text, or overwrite the new one on its next render.
@@ -176,11 +201,31 @@ The check runs when the toolbar appears or moves to another field.
 
 ### `toolbar.js` + `toolbar.css`: the UI
 
-- The host is a `<linkedin-fonts-toolbar>` element appended to `<html>`, with
-  a **closed shadow root**. LinkedIn's CSS cannot style it and its scripts
-  cannot reach into it, and the extension's CSS cannot leak into the page.
-  The host's inline styles use `all: initial !important`, so page rules that
-  target every element cannot move it either.
+- The host is a `<linkedin-fonts-toolbar>` element with a **closed shadow
+  root**. LinkedIn's CSS cannot style it and its scripts cannot reach into
+  it, and the extension's CSS cannot leak into the page. The host's inline
+  styles use `all: initial !important`, so page rules that target every
+  element cannot move it either.
+- **Top layer.** LinkedIn opens "Start a post" and the profile forms in
+  modal `<dialog>`s. A modal dialog lives in the browser's *top layer*, drawn
+  above everything (z-index does not help), and it makes every element
+  outside it inert (not clickable). So the host is a `popover="manual"`:
+  - it is attached inside the closest open `<dialog>` or popover around the
+    edited field (`topLayerAncestor()`, which also crosses shadow roots), or
+    to `<html>` when there is none. Being inside the dialog keeps it
+    clickable, and it never light-dismisses LinkedIn's own popovers;
+  - it is opened with `showPopover()` every time the toolbar appears, so it
+    sits on top of the top layer, above the dialog. Top-layer rendering also
+    escapes the dialog's `transform` and `overflow`;
+  - it is closed (`hidePopover()`) when the toolbar hides.
+
+  ```mermaid
+  flowchart LR
+      field["edited field"] --> ancestor{{"inside an open<br/>dialog or popover?"}}
+      ancestor -- yes --> inside["host appended<br/>inside that element"]
+      ancestor -- no --> html["host appended<br/>to html"]
+      inside & html --> top["showPopover()<br/>top of the top layer"]
+  ```
 - **It never takes focus.** `mousedown` is cancelled on the toolbar, which
   keeps focus and selection in the editor. Buttons have `tabindex="-1"` and use
   `aria-disabled` rather than `disabled`, because disabled buttons swallow
@@ -200,13 +245,19 @@ The check runs when the toolbar appears or moves to another field.
 - While the mouse button is held down the toolbar is hidden and refreshed on
   `pointerup`, so it does not chase the cursor during a drag selection.
   Keyboard selections (<kbd>Shift</kbd>+arrows) update immediately.
-- **Shortcuts** (<kbd>Ctrl</kbd> on Windows/Linux, <kbd>⌘</kbd> on macOS, no
-  <kbd>Alt</kbd>/<kbd>Shift</kbd>): `event.key` is used for Latin keyboard
-  layouts (AZERTY, QWERTZ…), and `event.code` (physical key) for non-Latin
-  ones. The browser default (bookmarks, page info, view source) and the native
-  contenteditable bold/italic are prevented **only** when there is a
-  selection in a supported field. Key repeats are swallowed but do not
-  toggle again.
+- **Shortcuts**: <kbd>⌘</kbd> on macOS, <kbd>Ctrl</kbd> on Windows/Linux,
+  without <kbd>Alt</kbd>/<kbd>Shift</kbd>.
+  - The modifier is strict. On macOS, <kbd>Ctrl</kbd>+<kbd>B</kbd> (and
+    <kbd>⌘</kbd>+<kbd>Ctrl</kbd>+<kbd>B</kbd>) is never intercepted and keeps its
+    native meaning. On Windows/Linux, the <kbd>Win</kbd>/<kbd>Meta</kbd> key is ignored.
+  - macOS is detected from `navigator.userAgentData.platform` (`"macOS"` in
+    Chromium) or `navigator.platform` (`"MacIntel"`), case-insensitively.
+  - `event.key` is used for Latin keyboard layouts (AZERTY, QWERTZ…), and
+    `event.code` (physical key) for non-Latin ones.
+  - The browser default (bookmarks, page info, view source) and the native
+    contenteditable bold/italic are prevented **only** when there is a
+    selection in a supported field.
+  - Key repeats are swallowed but do not toggle again.
 - A global flag (`Symbol.for('linkedin-fonts.loaded')`) prevents a second
   instance if the script is injected twice.
 
@@ -229,6 +280,24 @@ as small as possible.
 
 `scripts/build.mjs` produces `dist/chrome/` and `dist/firefox/` from the same
 sources:
+
+```mermaid
+flowchart LR
+    subgraph shared["Shared sources"]
+        code["src/content/*.js<br/>toolbar.css"]
+        base["src/manifest/base.json"]
+        assets["src/icons/*.png<br/>LICENSE"]
+    end
+    subgraph overrides["Per-browser overrides"]
+        chromeOverride["src/manifest/chrome.json"]
+        firefoxOverride["src/manifest/firefox.json"]
+    end
+    build(["scripts/build.mjs<br/>esbuild + manifest merge + copy<br/>version from package.json"])
+    shared --> build
+    overrides --> build
+    build --> chromeDist["dist/chrome/<br/>content.js for chrome120<br/>manifest.json, icons, LICENSE"]
+    build --> firefoxDist["dist/firefox/<br/>content.js for firefox140<br/>manifest.json, icons, LICENSE"]
+```
 
 1. esbuild bundles `src/content/index.js` into one classic script (IIFE)
    targeting `chrome120` / `firefox140`, with `toolbar.css` imported as a

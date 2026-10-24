@@ -71,30 +71,38 @@ the extension manually.
 
 ## Project structure
 
-```
-linkedin-fonts/
-├── src/
-│   ├── content/           the content script (see architecture.md)
-│   ├── manifest/          base.json + per-browser overrides
-│   └── icons/             icon.svg + generated PNGs
-├── scripts/
-│   ├── build.mjs          the build (one source tree, one output per browser)
-│   ├── lib/manifest.mjs   manifest merging
-│   ├── package-source.mjs source archive for AMO
-│   └── icons.sh           regenerates PNG icons from the SVG
-├── test/
-│   ├── *.test.js          unit tests (Node test runner)
-│   └── e2e/               end-to-end tests + tiny CDP / WebDriver BiDi drivers
-├── playground/index.html  local test page with LinkedIn-like fields
-├── DOCS/                  this documentation
-└── dist/, artifacts/      build output (git-ignored)
+| Path                         | Contents                                                       |
+| ---------------------------- | -------------------------------------------------------------- |
+| `src/content/`               | The content script (see [architecture.md](architecture.md)).   |
+| `src/manifest/`              | `base.json` plus the per-browser overrides.                    |
+| `src/icons/`                 | `icon.svg` (source) and the generated PNGs.                    |
+| `scripts/build.mjs`          | The build: one source tree, one output per browser.            |
+| `scripts/lib/manifest.mjs`   | Manifest merging.                                              |
+| `scripts/package-source.mjs` | Source archive for the addons.mozilla.org review.              |
+| `scripts/icons.sh`           | Regenerates the PNG icons from the SVG.                        |
+| `test/*.test.js`             | Unit tests (Node test runner).                                 |
+| `test/e2e/`                  | End-to-end tests and the tiny CDP / WebDriver BiDi drivers.    |
+| `playground/index.html`      | Local test page with LinkedIn-like fields.                     |
+| `DOCS/`                      | This documentation.                                            |
+| `dist/`, `artifacts/`        | Build output (git-ignored).                                    |
+
+The development loop:
+
+```mermaid
+flowchart LR
+    edit["Edit src/"] --> watch["npm run watch<br/>rebuilds dist/"]
+    watch --> playground["playground/index.html<br/>reload the page"]
+    watch --> browser["npm run dev:chrome / dev:firefox<br/>reload LinkedIn"]
+    playground & browser --> tests["npm test<br/>npm run test:e2e"]
+    tests --> edit
 ```
 
 ## The playground
 
 `playground/index.html` mimics LinkedIn's fields: a multi-paragraph
 contenteditable with a mention chip, a textarea, a text input, a search box
-and static text. It loads `../dist/chrome/content.js` with a plain `<script>`
+and static text, plus a "Start a post" and an "Edit intro" **modal dialog** and
+a chat **popover** (LinkedIn's editors in the browser's top layer). It loads `../dist/chrome/content.js` with a plain `<script>`
 tag (the content script uses no extension APIs), so **no extension install is
 needed**:
 
@@ -128,7 +136,8 @@ visual review.
   `CHROME_PATH` / `FIREFOX_PATH` to use others. A browser that is not found
   is skipped.
 - Shortcuts use <kbd>⌘</kbd> on macOS hosts and <kbd>Ctrl</kbd> elsewhere, as a
-  real user would.
+  real user would. A test also presses the *other* modifier (<kbd>Ctrl</kbd> on
+  macOS) and checks that it is ignored and reaches the page untouched.
 - The toolbar lives in a closed shadow root, so the tests find it by probing
   the viewport with `document.elementFromPoint`, and click its buttons by
   coordinates.
@@ -143,8 +152,8 @@ Automated tests cannot log in to LinkedIn. Before a release, check by hand in
 - [ ] Comment and reply boxes.
 - [ ] Messaging (full page and the chat overlay).
 - [ ] Profile: headline (input) and About (textarea).
-- [ ] Keyboard shortcuts in each of the above, and that <kbd>Ctrl/⌘+B</kbd> outside LinkedIn fields still does what the browser normally does.
-- [ ] <kbd>Ctrl/⌘+Z</kbd> after a change.
+- [ ] Keyboard shortcuts in each of the above (<kbd>⌘</kbd> on macOS, <kbd>Ctrl</kbd> elsewhere). On macOS, <kbd>Ctrl</kbd>+<kbd>B</kbd>/<kbd>I</kbd>/<kbd>U</kbd> must do nothing. Outside LinkedIn fields the shortcuts must keep their usual browser behaviour.
+- [ ] Undo (<kbd>⌘</kbd>+<kbd>Z</kbd> / <kbd>Ctrl</kbd>+<kbd>Z</kbd>) after a change.
 - [ ] LinkedIn's dark mode (*Settings → Preferences → Dark mode*): the toolbar turns dark.
 - [ ] Publish a post and check that the text looks right in the feed.
 

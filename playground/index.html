@@ -75,6 +75,23 @@
         color: #0a66c2;
         font-weight: 600;
       }
+      .modal {
+        width: min(560px, 90vw);
+        border: 0;
+        border-radius: 8px;
+        padding: 16px;
+        background: var(--card);
+        color: var(--text);
+        transform: translateY(8px);
+        display: grid;
+        gap: 12px;
+      }
+      .modal:not([open]):not(:popover-open) {
+        display: none;
+      }
+      .modal::backdrop {
+        background: rgba(0, 0, 0, 0.6);
+      }
       .codepoints {
         font: 12px/1.4 ui-monospace, Menlo, monospace;
         color: var(--muted);
@@ -91,6 +108,12 @@
         <p>
           Select text in any field below. Theme:
           <button type="button" id="theme">Toggle light / dark</button>
+        </p>
+        <p>
+          LinkedIn opens some editors in modal dialogs (top layer):
+          <button type="button" data-open="post-dialog">Start a post</button>
+          <button type="button" data-open="intro-dialog">Edit intro</button>
+          <button type="button" popovertarget="chat-popover">Open chat popover</button>
         </p>
       </header>
 
@@ -128,7 +151,35 @@ Second line with àccénts and digits 1234.</textarea>
       </section>
     </main>
 
+    <!-- Like LinkedIn's "Start a post": a modal <dialog>, slightly transformed. -->
+    <dialog id="post-dialog" class="modal">
+      <h2>Create a post (modal dialog)</h2>
+      <div id="dialog-rich" contenteditable="true" role="textbox" aria-multiline="true">
+        <p>Excited to share my new role at Example Corp.</p>
+        <p>Second paragraph of the post.</p>
+      </div>
+      <form method="dialog"><button id="post-close">Close</button></form>
+    </dialog>
+
+    <!-- Like LinkedIn's profile "Edit intro" form. -->
+    <dialog id="intro-dialog" class="modal">
+      <h2>Edit intro (modal dialog)</h2>
+      <input id="dialog-input" type="text" value="Senior engineer at Example Corp" />
+      <textarea id="dialog-textarea" rows="3">I build things for the web.</textarea>
+      <form method="dialog"><button id="intro-close">Close</button></form>
+    </dialog>
+
+    <!-- A chat window shown as a popover (also top layer). -->
+    <div id="chat-popover" popover="manual" class="modal">
+      <h2>Chat (popover)</h2>
+      <div id="popover-rich" contenteditable="true" role="textbox">Hi there, see you tomorrow!</div>
+    </div>
+
     <script>
+      for (const button of document.querySelectorAll('[data-open]')) {
+        button.addEventListener('click', () => document.getElementById(button.dataset.open).showModal());
+      }
+
       document.getElementById('theme').addEventListener('click', () => {
         document.documentElement.classList.toggle('dark');
       });

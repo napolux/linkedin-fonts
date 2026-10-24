@@ -14,7 +14,7 @@ import { getActiveTarget } from './editable.js';
 import { replaceSelection } from './replace.js';
 import { getSelectionBox } from './position.js';
 import { detectTheme } from './theme.js';
-import { Toolbar } from './toolbar.js';
+import { Toolbar, topLayerAncestor } from './toolbar.js';
 
 // Chromium reports "macOS" (or an empty string) in userAgentData,
 // Firefox only has navigator.platform ("MacIntel"): match case-insensitively.
@@ -53,7 +53,14 @@ function start() {
     if (pointerDown) return;
 
     const target = getActiveTarget();
-    const box = target && getSelectionBox(target, toolbar.scratch);
+    if (!target) {
+      toolbar.hide();
+      return;
+    }
+
+    // Fields in a modal dialog or popover (top layer) get the toolbar inside it.
+    const container = topLayerAncestor(target.element) ?? document.documentElement;
+    const box = getSelectionBox(target, toolbar.scratchIn(container));
     if (!box) {
       toolbar.hide();
       return;
@@ -64,7 +71,7 @@ function start() {
       theme = detectTheme(target.element);
       themeElement = target.element;
     }
-    toolbar.show(box, analyze(target.text), theme);
+    toolbar.show(box, analyze(target.text), theme, container);
   }
 
   /** Batches bursts of events (selectionchange, scroll…) into one refresh per frame. */
@@ -76,6 +83,14 @@ function start() {
     if (toolbar.isEventInside(event)) return;
     pointerDown = true;
     toolbar.hide();
+  }
+
+  /**
+   * keyup only matters for keyboard selections (Shift + arrows…) or to
+   * update a visible toolbar; plain typing is covered by selectionchange.
+   */
+  function onKeyUp(event) {
+    if (event.shiftKey || toolbar.visible) scheduleRefresh();
   }
 
   function onPointerUp() {
@@ -110,7 +125,7 @@ function start() {
   document.addEventListener('select', scheduleRefresh, capture);
   document.addEventListener('focusin', scheduleRefresh, capture);
   document.addEventListener('focusout', scheduleRefresh, capture);
-  document.addEventListener('keyup', scheduleRefresh, capture);
+  document.addEventListener('keyup', onKeyUp, capture);
   window.addEventListener('keydown', onKeyDown, capture);
   window.addEventListener('pointerdown', onPointerDown, passiveCapture);
   window.addEventListener('pointerup', onPointerUp, passiveCapture);

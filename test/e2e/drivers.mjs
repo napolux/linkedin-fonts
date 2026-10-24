@@ -4,7 +4,7 @@
  * - Firefox through WebDriver BiDi.
  * Both talk over Node's built-in WebSocket and expose the same interface:
  *
- *   open(url), evaluate(expression), click(x, y), shortcut(letter),
+ *   open(url), evaluate(expression), click(x, y), shortcut(letter, modifier),
  *   screenshot() -> Buffer, close()
  *
  * Browsers are found in the usual install locations or through the
@@ -172,6 +172,8 @@ export async function launchChrome(binary = chromePath) {
 
   return {
     name: 'chrome',
+    /** Chrome only: raw DevTools Protocol command on the page session. */
+    cdp: send,
     async open(pageUrl) {
       const loaded = connection.waitFor((m) => m.method === 'Page.loadEventFired' && m.sessionId === sessionId);
       await send('Page.navigate', { url: pageUrl });
@@ -199,12 +201,13 @@ export async function launchChrome(binary = chromePath) {
         });
       }
     },
-    async shortcut(letter, { mac }) {
+    // `modifier` is 'Meta' (Cmd on macOS) or 'Control'.
+    async shortcut(letter, modifier) {
       const key = {
         key: letter,
         code: `Key${letter.toUpperCase()}`,
         windowsVirtualKeyCode: letter.toUpperCase().charCodeAt(0),
-        modifiers: mac ? 4 : 2, // 4 = Meta, 2 = Control
+        modifiers: { Meta: 4, Control: 2 }[modifier], // CDP modifier bit flags
       };
       await send('Input.dispatchKeyEvent', { type: 'keyDown', ...key });
       await send('Input.dispatchKeyEvent', { type: 'keyUp', ...key });
@@ -283,17 +286,17 @@ export async function launchFirefox(binary = firefoxPath) {
         },
       ]);
     },
-    async shortcut(letter, { mac }) {
-      const modifier = mac ? WEBDRIVER_KEYS.Meta : WEBDRIVER_KEYS.Control;
+    // `modifier` is 'Meta' (Cmd on macOS) or 'Control'.
+    async shortcut(letter, modifier) {
       await perform([
         {
           type: 'key',
           id: 'keyboard',
           actions: [
-            { type: 'keyDown', value: modifier },
+            { type: 'keyDown', value: WEBDRIVER_KEYS[modifier] },
             { type: 'keyDown', value: letter },
             { type: 'keyUp', value: letter },
-            { type: 'keyUp', value: modifier },
+            { type: 'keyUp', value: WEBDRIVER_KEYS[modifier] },
           ],
         },
       ]);

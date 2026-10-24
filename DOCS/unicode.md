@@ -67,19 +67,25 @@ Underline combines freely with bold and italic: `𝗮̲`.
 
 Precomposed letters such as `è` (U+00E8) have no Mathematical counterpart.
 The extension **decomposes** each grapheme (Unicode NFD), styles the base
-letter and keeps the accent as a combining mark:
-
-```
-è  →  NFD: e + U+0300 (combining grave)  →  𝗲 + U+0300  →  𝗲̀
-```
+letter and keeps the accent as a combining mark (solid arrows below).
 
 The output of each changed grapheme is normalized to **NFC**. When a style is
-removed, `e + U+0300` recombines into the original precomposed `è`, so the
-round trip is exact:
+removed, `e + U+0300` recombines into the original precomposed `è` (dashed
+arrows), so the round trip is exact:
 
+```mermaid
+flowchart LR
+    original["è<br/>U+00E8"] -- NFD --> decomposed["e + U+0300<br/>base + combining grave"]
+    decomposed -- "style the base letter" --> styled["𝗲̀<br/>U+1D5F2 + U+0300"]
+    styled -. "remove bold" .-> plain["e + U+0300"]
+    plain -. NFC .-> original
 ```
-"Perché è così?" → bold → "𝗣𝗲𝗿𝗰𝗵𝗲́ 𝗲̀ 𝗰𝗼𝘀𝗶̀?" → bold off → "Perché è così?"
-```
+
+The same applies to whole sentences:
+
+| Text                | After bold       | After removing bold |
+| ------------------- | ---------------- | ------------------- |
+| Perché è così?      | 𝗣𝗲𝗿𝗰𝗵𝗲́ 𝗲̀ 𝗰𝗼𝘀𝗶̀?  | Perché è così?      |
 
 This covers most Western European letters: à á â ã ä å ç è é ê ë ì í î ï ñ
 ò ó ô õ ö ù ú û ü ý ÿ and their capitals, plus many Central European ones

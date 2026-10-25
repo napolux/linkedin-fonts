@@ -46,6 +46,11 @@ Dashboard: <https://chrome.google.com/webstore/devconsole>
    upload `linkedin-fonts-chrome-<version>.zip`.
 2. **Store listing**: description, at least one 1280×800 screenshot, the
    128×128 icon (`src/icons/icon-128.png`), category *Productivity*.
+   Five screenshots are ready in `store/screenshots/` (1280×800, plus
+   `-640x400` copies). They show light and dark mode, the "Start a post"
+   modal, the profile headline and messaging. Regenerate them after UI
+   changes with `npm run screenshots`: headless Chrome renders the playground
+   with the real extension build at 2× density.
 3. **Privacy practices**:
    - *Single purpose*: "Format the text the user writes on LinkedIn (bold,
      italic, underline) using Unicode characters."

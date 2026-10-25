@@ -41,6 +41,7 @@ npm run build
 | `npm run dev:firefox`   | Starts Firefox with `dist/firefox` loaded and opens LinkedIn (auto-reloads).  |
 | `npm test`              | Unit tests (`test/*.test.js`).                                                |
 | `npm run test:e2e`      | Builds, then runs the end-to-end tests in headless Chrome and Firefox.        |
+| `npm run screenshots`   | Builds, then renders the store screenshots into `store/screenshots/`.         |
 | `npm run lint`          | ESLint, then `web-ext lint` on `dist/firefox` (run a build first).            |
 | `npm run package`       | Builds and zips both browsers into `artifacts/`.                              |
 | `npm run package:source`| Zips the committed sources (for addons.mozilla.org review).                   |

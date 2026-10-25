@@ -11,3 +11,6 @@ web-ext-artifacts/
 *.log
 .idea/
 .vscode/
+
+# Local tool configuration
+.impeccable/

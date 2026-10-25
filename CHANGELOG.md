@@ -6,30 +6,16 @@ and the project uses [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
-### Fixed
-
-- The toolbar was invisible (and would not have been clickable) in editors
-  inside modal dialogs, such as "Start a post" and the profile forms: they
-  live in the browser's top layer. The toolbar is now a popover attached
-  inside the dialog or popover that contains the field.
-
-- Chrome: neither the toolbar nor the shortcuts worked in the messaging
-  overlay, whose editor lives in a shadow DOM. Chrome hides mouse selections
-  inside shadow roots from `document.getSelection()`; the selection is now
-  read from the editor's own shadow root.
-
-### Changed
-
-- Less work on every keystroke while typing: no refresh on `keyup` unless a
-  selection is being made or the toolbar is visible, and no DOM writes when
-  the toolbar is already hidden.
-
-## [0.1.0] - Not yet published
+## [0.1.0] - 2026-10-25
 
 ### Added
 
 - Floating B / I / U toolbar on text selections in LinkedIn fields: posts,
   comments, messages (contenteditable), textareas and text inputs.
+- Works in editors inside modal dialogs and popovers ("Start a post",
+  profile forms), whose top layer would hide a regular overlay, and inside
+  shadow DOM (the messaging overlay), where Chrome hides mouse selections
+  from `document.getSelection()`.
 - Bold, italic and bold italic with Unicode sans-serif Mathematical
   Alphanumeric Symbols. Underline with U+0332 COMBINING LOW LINE.
 - Stackable styles: the toolbar stays open while the text is selected, and
